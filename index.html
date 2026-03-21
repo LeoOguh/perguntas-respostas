@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuizBattle</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<style>
+  /* ── CONFIG ── Preencha abaixo ── */
+  :root {
+    --gemini-key: "SUA_CHAVE_GEMINI_AQUI";
+    --c1: #0f0e17;
+    --c2: #fffffe;
+    --accent: #ff6b35;
+    --accent2: #a8dadc;
+    --muted: #a7a9be;
+    --green: #06d6a0;
+    --red: #ef233c;
+    --card: #1a1a2e;
+    --card2: #16213e;
+    --border: rgba(255,255,255,0.08);
+    --radius: 16px;
+    --font-head: 'Syne', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--c1);
+    color: var(--c2);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    overflow-x: hidden;
+  }
+
+  /* noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* glow orbs */
+  body::after {
+    content: '';
+    position: fixed;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,107,53,0.12) 0%, transparent 70%);
+    top: -100px;
+    right: -100px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .orb2 {
+    position: fixed;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(168,218,220,0.1) 0%, transparent 70%);
+    bottom: -100px;
+    left: -100px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .screen { 
+    position: relative; 
+    z-index: 1; 
+    width: 100%; 
+    max-width: 560px;
+    animation: fadeUp 0.4s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo {
+    font-family: var(--font-head);
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+  }
+  .logo span { color: var(--accent); }
+
+  .tagline {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-bottom: 40px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 16px;
+  }
+
+  .card-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  input[type="text"], input[type="password"], select {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--c2);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    padding: 12px 16px;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 12px;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--card); }
+
+  .themes-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .theme-chip {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .theme-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  .btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    font-family: var(--font-head);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #ff8555; }
+  .btn-secondary { background: rgba(255,255,255,0.07); color: var(--c2); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: rgba(255,255,255,0.12); }
+  .btn + .btn { margin-top: 10px; }
+
+  .divider {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 16px 0;
+    position: relative;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 42%;
+    height: 1px;
+    background: var(--border);
+  }
+  .divider::before { left: 0; }
+  .divider::after { right: 0; }
+
+  /* LOBBY */
+  .room-code {
+    font-family: var(--font-head);
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: 8px;
+    color: var(--accent);
+    text-align: center;
+    margin: 16px 0;
+  }
+  .room-link {
+    background: rgba(255,255,255,0.04);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    word-break: break-all;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .room-link:hover { background: rgba(255,255,255,0.08); }
+
+  .players-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .player-slot {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .player-slot.me { border-color: var(--accent); }
+  .player-slot.opponent { border-color: var(--accent2); }
+  .player-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .avatar-me { background: rgba(255,107,53,0.2); color: var(--accent); }
+  .avatar-opp { background: rgba(168,218,220,0.2); color: var(--accent2); }
+  .player-name { font-size: 0.85rem; font-weight: 500; }
+  .waiting-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+  /* GAME */
+  .scoreboard {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .score-player { text-align: center; }
+  .score-name { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
+  .score-pts {
+    font-family: var(--font-head);
+    font-size: 2.2rem;
+    font-weight: 800;
+  }
+  .score-pts.me-color { color: var(--accent); }
+  .score-pts.opp-color { color: var(--accent2); }
+  .vs-label {
+    font-family: var(--font-head);
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  /* timer */
+  .timer-wrap {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 20px;
+  }
+  .timer-svg { transform: rotate(-90deg); }
+  .timer-track { fill: none; stroke: var(--border); stroke-width: 4; }
+  .timer-bar { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.3s; }
+  .timer-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-head);
+    font-weight: 800;
+    font-size: 1.1rem;
+  }
+
+  .question-num {
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .question-text {
+    font-family: var(--font-head);
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.4;
+    margin-bottom: 28px;
+    min-height: 80px;
+  }
+
+  .options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .option-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--c2);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    padding: 14px 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .option-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .option-btn:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-2px); }
+  .option-btn:hover:not(:disabled)::before { opacity: 0.08; }
+  .option-btn.selected { border-color: var(--accent); background: rgba(255,107,53,0.12); }
+  .option-btn.correct { border-color: var(--green); background: rgba(6,214,160,0.15); color: var(--green); }
+  .option-btn.wrong { border-color: var(--red); background: rgba(239,35,60,0.15); color: var(--red); }
+  .option-btn:disabled { cursor: default; transform: none; }
+
+  .letter-badge {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 22px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  .both-answered {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 16px;
+    min-height: 20px;
+  }
+
+  /* opponent indicator */
+  .opp-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .opp-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent2);
+  }
+  .opp-dot.thinking { animation: pulse 1s infinite; }
+
+  /* RESULT */
+  .result-icon {
+    font-size: 4rem;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .result-title {
+    font-family: var(--font-head);
+    font-size: 2rem;
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .result-sub {
+    text-align: center;
+    color: var(--muted);
+    margin-bottom: 28px;
+  }
+  .final-scores {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .final-card {
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .final-card.winner-card { border-color: var(--accent); }
+  .final-pts {
+    font-family: var(--font-head);
+    font-size: 2.8rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .final-pts.me-color { color: var(--accent); }
+  .final-pts.opp-color { color: var(--accent2); }
+
+  /* LOADING */
+  .loading-dots {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: 20px 0;
+  }
+  .loading-dots span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    animation: bounce 0.8s infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce { 0%,80%,100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+  /* CONFIG screen */
+  .config-note {
+    background: rgba(255,107,53,0.1);
+    border: 1px solid rgba(255,107,53,0.3);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 0.82rem;
+    color: var(--accent);
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+
+  .hidden { display: none !important; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 0.85rem;
+    transition: transform 0.3s;
+    z-index: 100;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .step-indicator {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+  .step-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+  .step-dot.active { background: var(--accent); }
+</style>
+</head>
+<body>
+<div class="orb2"></div>
+
+<!-- ═══════════════════════════════
+     SCREEN: CONFIG (first time)
+═══════════════════════════════ -->
+<div id="screen-config" class="screen hidden">
+  <div class="logo">Quiz<span>Battle</span></div>
+  <p class="tagline">Configure suas chaves para começar</p>
+
+  <div class="config-note">
+    Suas chaves ficam salvas apenas no navegador (localStorage) e nunca são enviadas para nenhum servidor externo além das próprias APIs.
+  </div>
+
+  <div class="card">
+    <div class="card-label">Chave da API Gemini</div>
+    <input type="password" id="cfg-gemini" placeholder="AIza..." />
+    <div class="card-label">Firebase Config (JSON)</div>
+    <textarea id="cfg-firebase" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;color:var(--c2);font-family:var(--font-body);font-size:0.82rem;padding:12px;outline:none;resize:vertical;min-height:140px;margin-bottom:12px;" placeholder='{"apiKey":"...","authDomain":"...","databaseURL":"...","projectId":"..."}'></textarea>
+    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:16px;">Crie um projeto gratuito em <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent);">firebase.google.com</a>, ative o Realtime Database e copie o config do seu app aqui.</p>
+    <button class="btn btn-primary" onclick="saveConfig()">Salvar e continuar</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: HOME
+═══════════════════════════════ -->
+<div id="screen-home" class="screen hidden">
+  <div class="logo">Quiz<span>Battle</span></div>
+  <p class="tagline">Batalha de perguntas em tempo real</p>
+
+  <div class="card">
+    <div class="card-label">Seu nome</div>
+    <input type="text" id="player-name" placeholder="Como quer ser chamado?" maxlength="20" />
+
+    <button class="btn btn-primary" onclick="goCreate()">Criar sala</button>
+    <div class="divider">ou</div>
+    <button class="btn btn-secondary" onclick="goJoin()">Entrar em uma sala</button>
+  </div>
+
+  <p style="text-align:center;font-size:0.75rem;color:var(--muted);margin-top:16px;cursor:pointer;" onclick="resetConfig()">⚙ Reconfigurar chaves</p>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: CREATE ROOM
+═══════════════════════════════ -->
+<div id="screen-create" class="screen hidden">
+  <div class="logo" style="font-size:1.6rem;margin-bottom:4px;">Nova Sala</div>
+  <p class="tagline">Configure a batalha</p>
+
+  <div class="card">
+    <div class="card-label">Temas (selecione um ou mais)</div>
+    <div class="themes-wrap" id="themes-wrap">
+      <div class="theme-chip" onclick="toggleTheme(this,'História')">História</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Ciências')">Ciências</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Geografia')">Geografia</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Esportes')">Esportes</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Cultura Pop')">Cultura Pop</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Tecnologia')">Tecnologia</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Gastronomia')">Gastronomia</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Arte & Música')">Arte & Música</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Matemática')">Matemática</div>
+      <div class="theme-chip" onclick="toggleTheme(this,'Natureza')">Natureza</div>
+    </div>
+    <input type="text" id="custom-theme" placeholder="Ou escreva um tema personalizado..." />
+
+    <div class="card-label" style="margin-top:4px;">Número de perguntas</div>
+    <select id="num-questions">
+      <option value="5">5 perguntas</option>
+      <option value="10" selected>10 perguntas</option>
+      <option value="15">15 perguntas</option>
+    </select>
+
+    <div class="card-label">Tempo por pergunta</div>
+    <select id="time-per-q">
+      <option value="15">15 segundos</option>
+      <option value="20" selected>20 segundos</option>
+      <option value="30">30 segundos</option>
+    </select>
+
+    <div class="card-label">Dificuldade</div>
+    <select id="difficulty">
+      <option value="fácil">Fácil</option>
+      <option value="médio" selected>Médio</option>
+      <option value="difícil">Difícil</option>
+    </select>
+  </div>
+
+  <button class="btn btn-primary" onclick="createRoom()">Criar sala</button>
+  <button class="btn btn-secondary" onclick="showScreen('screen-home')">Voltar</button>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: JOIN ROOM
+═══════════════════════════════ -->
+<div id="screen-join" class="screen hidden">
+  <div class="logo" style="font-size:1.6rem;margin-bottom:4px;">Entrar na Sala</div>
+  <p class="tagline">Cole o link ou código da sala</p>
+
+  <div class="card">
+    <div class="card-label">Código da sala</div>
+    <input type="text" id="join-code" placeholder="Ex: AB12CD" maxlength="6" style="text-transform:uppercase;letter-spacing:4px;font-family:var(--font-head);font-size:1.2rem;text-align:center;" />
+    <button class="btn btn-primary" onclick="joinRoom()">Entrar na sala</button>
+  </div>
+
+  <button class="btn btn-secondary" onclick="showScreen('screen-home')">Voltar</button>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: LOBBY
+═══════════════════════════════ -->
+<div id="screen-lobby" class="screen hidden">
+  <div class="logo" style="font-size:1.6rem;margin-bottom:4px;">Aguardando...</div>
+
+  <div class="card">
+    <div class="card-label" style="text-align:center;">Código da sala</div>
+    <div class="room-code" id="lobby-code">------</div>
+    <div class="room-link" id="lobby-link" onclick="copyLink()" title="Clique para copiar">🔗 Clique para copiar o link</div>
+
+    <div class="players-grid">
+      <div class="player-slot me">
+        <div class="player-avatar avatar-me" id="lobby-me-avatar">?</div>
+        <div class="player-name" id="lobby-me-name">Você</div>
+      </div>
+      <div class="player-slot opponent" id="lobby-opp-slot">
+        <div class="waiting-dot"></div>
+        <div class="player-name" id="lobby-opp-name" style="color:var(--muted);">Aguardando...</div>
+      </div>
+    </div>
+
+    <div id="lobby-info" style="font-size:0.82rem;color:var(--muted);text-align:center;line-height:1.6;"></div>
+  </div>
+
+  <button class="btn btn-primary hidden" id="btn-start" onclick="startGame()">Iniciar batalha</button>
+  <button class="btn btn-secondary" onclick="leaveRoom()">Cancelar</button>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: LOADING QUESTIONS
+═══════════════════════════════ -->
+<div id="screen-loading" class="screen hidden" style="text-align:center;">
+  <div class="logo" style="font-size:1.6rem;margin-bottom:8px;">Gerando perguntas<span>...</span></div>
+  <p style="color:var(--muted);font-size:0.9rem;margin-bottom:8px;">A IA está preparando a batalha</p>
+  <div class="loading-dots"><span></span><span></span><span></span></div>
+  <p id="loading-theme" style="color:var(--accent);font-size:0.85rem;margin-top:8px;"></p>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: GAME
+═══════════════════════════════ -->
+<div id="screen-game" class="screen hidden">
+  <!-- scoreboard -->
+  <div class="scoreboard">
+    <div class="score-player">
+      <div class="score-name" id="score-me-name">Você</div>
+      <div class="score-pts me-color" id="score-me">0</div>
+    </div>
+    <div class="vs-label">VS</div>
+    <div class="score-player">
+      <div class="score-name" id="score-opp-name">Adversário</div>
+      <div class="score-pts opp-color" id="score-opp">0</div>
+    </div>
+  </div>
+
+  <div class="card" id="question-card">
+    <!-- timer -->
+    <div class="timer-wrap">
+      <svg class="timer-svg" width="56" height="56" viewBox="0 0 56 56">
+        <circle class="timer-track" cx="28" cy="28" r="24"/>
+        <circle class="timer-bar" id="timer-circle" cx="28" cy="28" r="24"
+          stroke-dasharray="150.8" stroke-dashoffset="0"/>
+      </svg>
+      <div class="timer-text" id="timer-text">20</div>
+    </div>
+
+    <div class="question-num" id="question-num">PERGUNTA 1 DE 10</div>
+    <div class="question-text" id="question-text">Carregando...</div>
+
+    <div class="opp-status">
+      <div class="opp-dot thinking" id="opp-dot"></div>
+      <span id="opp-status-text">Adversário respondendo...</span>
+    </div>
+
+    <div class="options-grid" id="options-grid"></div>
+
+    <div class="both-answered" id="both-answered"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════
+     SCREEN: RESULT
+═══════════════════════════════ -->
+<div id="screen-result" class="screen hidden">
+  <div class="result-icon" id="result-icon">🏆</div>
+  <div class="result-title" id="result-title">Você venceu!</div>
+  <div class="result-sub" id="result-sub">Pontuação final</div>
+
+  <div class="final-scores">
+    <div class="final-card" id="final-me-card">
+      <div class="final-pts me-color" id="final-me-pts">0</div>
+      <div style="font-size:0.82rem;color:var(--muted);margin-top:6px;" id="final-me-name">Você</div>
+    </div>
+    <div class="final-card" id="final-opp-card">
+      <div class="final-pts opp-color" id="final-opp-pts">0</div>
+      <div style="font-size:0.82rem;color:var(--muted);margin-top:6px;" id="final-opp-name">Adversário</div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" onclick="playAgain()">Jogar novamente</button>
+  <button class="btn btn-secondary" onclick="showScreen('screen-home')" style="margin-top:10px;">Início</button>
+</div>
+
+<!-- toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let db = null;
+let GEMINI_KEY = '';
+let roomRef = null;
+let roomCode = '';
+let myRole = ''; // 'host' | 'guest'
+let myName = '';
+let oppName = '';
+let questions = [];
+let currentQ = 0;
+let myScore = 0;
+let oppScore = 0;
+let timerInterval = null;
+let timeLeft = 20;
+let totalTime = 20;
+let answered = false;
+let roomConfig = {};
+let unsubscribers = [];
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  // check URL for room code
+  const params = new URLSearchParams(window.location.search);
+  const codeFromUrl = params.get('room');
+
+  const savedGemini = localStorage.getItem('qb_gemini');
+  const savedFb = localStorage.getItem('qb_firebase');
+
+  if (!savedGemini || !savedFb) {
+    showScreen('screen-config');
+    return;
+  }
+
+  initFirebase(savedFb);
+  GEMINI_KEY = savedGemini;
+
+  if (codeFromUrl) {
+    showScreen('screen-home');
+    // pre-fill join
+    setTimeout(() => {
+      const name = localStorage.getItem('qb_name') || '';
+      document.getElementById('player-name').value = name;
+      goJoin(codeFromUrl.toUpperCase());
+    }, 100);
+  } else {
+    showScreen('screen-home');
+    const name = localStorage.getItem('qb_name') || '';
+    document.getElementById('player-name').value = name;
+  }
+});
+
+function initFirebase(configStr) {
+  try {
+    const cfg = typeof configStr === 'string' ? JSON.parse(configStr) : configStr;
+    if (!firebase.apps.length) {
+      firebase.initializeApp(cfg);
+    }
+    db = firebase.database();
+    return true;
+  } catch(e) {
+    showToast('Erro no Firebase: ' + e.message);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+function saveConfig() {
+  const gemini = document.getElementById('cfg-gemini').value.trim();
+  const fb = document.getElementById('cfg-firebase').value.trim();
+
+  if (!gemini) { showToast('Informe a chave do Gemini'); return; }
+  if (!fb) { showToast('Informe o config do Firebase'); return; }
+
+  try {
+    JSON.parse(fb);
+  } catch(e) {
+    showToast('Firebase config inválido (verifique o JSON)');
+    return;
+  }
+
+  localStorage.setItem('qb_gemini', gemini);
+  localStorage.setItem('qb_firebase', fb);
+  GEMINI_KEY = gemini;
+
+  if (!initFirebase(fb)) return;
+  showScreen('screen-home');
+}
+
+function resetConfig() {
+  localStorage.removeItem('qb_gemini');
+  localStorage.removeItem('qb_firebase');
+  showScreen('screen-config');
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.remove('hidden');
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+  }
+}
+
+function goCreate() {
+  myName = document.getElementById('player-name').value.trim() || 'Jogador 1';
+  localStorage.setItem('qb_name', myName);
+  showScreen('screen-create');
+}
+
+function goJoin(prefill) {
+  myName = document.getElementById('player-name').value.trim() || 'Jogador 2';
+  localStorage.setItem('qb_name', myName);
+  showScreen('screen-join');
+  if (prefill) {
+    document.getElementById('join-code').value = prefill;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// THEMES
+// ═══════════════════════════════════════════════
+function toggleTheme(el, name) {
+  el.classList.toggle('active');
+}
+
+function getSelectedThemes() {
+  const chips = [...document.querySelectorAll('.theme-chip.active')].map(c => c.textContent);
+  const custom = document.getElementById('custom-theme').value.trim();
+  if (custom) chips.push(custom);
+  return chips.length > 0 ? chips : ['Conhecimentos Gerais'];
+}
+
+// ═══════════════════════════════════════════════
+// ROOM CREATION
+// ═══════════════════════════════════════════════
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length: 6}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+}
+
+async function createRoom() {
+  if (!db) { showToast('Firebase não configurado'); return; }
+  myRole = 'host';
+  roomCode = genCode();
+  roomConfig = {
+    themes: getSelectedThemes(),
+    numQuestions: parseInt(document.getElementById('num-questions').value),
+    timePerQ: parseInt(document.getElementById('time-per-q').value),
+    difficulty: document.getElementById('difficulty').value,
+  };
+
+  roomRef = db.ref('rooms/' + roomCode);
+  await roomRef.set({
+    status: 'waiting',
+    config: roomConfig,
+    host: { name: myName, score: 0, answer: null },
+    guest: null,
+    currentQuestion: -1,
+    questions: null,
+  });
+
+  // cleanup on disconnect
+  roomRef.onDisconnect().remove();
+
+  setupLobby();
+  showScreen('screen-lobby');
+  listenLobby();
+}
+
+function setupLobby() {
+  document.getElementById('lobby-code').textContent = roomCode;
+  const url = window.location.href.split('?')[0] + '?room=' + roomCode;
+  document.getElementById('lobby-link').textContent = '🔗 ' + url;
+  document.getElementById('lobby-link').setAttribute('data-url', url);
+
+  const initials = myName.slice(0,2).toUpperCase();
+  document.getElementById('lobby-me-avatar').textContent = initials;
+  document.getElementById('lobby-me-name').textContent = myName + ' (você)';
+
+  const cfg = roomConfig;
+  document.getElementById('lobby-info').innerHTML =
+    `Temas: <strong>${cfg.themes.join(', ')}</strong><br>
+     ${cfg.numQuestions} perguntas · ${cfg.timePerQ}s cada · Dificuldade ${cfg.difficulty}`;
+}
+
+// ═══════════════════════════════════════════════
+// JOIN ROOM
+// ═══════════════════════════════════════════════
+async function joinRoom() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (code.length < 4) { showToast('Informe o código da sala'); return; }
+  if (!db) { showToast('Firebase não configurado'); return; }
+
+  const snap = await db.ref('rooms/' + code).once('value');
+  if (!snap.exists()) { showToast('Sala não encontrada'); return; }
+
+  const data = snap.val();
+  if (data.status !== 'waiting') { showToast('Esta sala já iniciou ou está cheia'); return; }
+  if (data.guest) { showToast('Sala já está cheia'); return; }
+
+  myRole = 'guest';
+  roomCode = code;
+  roomConfig = data.config;
+  roomRef = db.ref('rooms/' + roomCode);
+
+  await roomRef.child('guest').set({ name: myName, score: 0, answer: null });
+  roomRef.child('guest').onDisconnect().remove();
+
+  oppName = data.host.name;
+
+  document.getElementById('lobby-code').textContent = roomCode;
+  const url = window.location.href.split('?')[0] + '?room=' + roomCode;
+  document.getElementById('lobby-link').textContent = '🔗 ' + url;
+  document.getElementById('lobby-link').setAttribute('data-url', url);
+
+  const initials = myName.slice(0,2).toUpperCase();
+  document.getElementById('lobby-me-avatar').textContent = initials;
+  document.getElementById('lobby-me-name').textContent = myName + ' (você)';
+  document.getElementById('lobby-opp-name').textContent = oppName;
+  document.getElementById('lobby-opp-slot').innerHTML = `
+    <div class="player-avatar avatar-opp">${oppName.slice(0,2).toUpperCase()}</div>
+    <div class="player-name">${oppName}</div>`;
+
+  document.getElementById('lobby-info').innerHTML =
+    `Temas: <strong>${roomConfig.themes.join(', ')}</strong><br>
+     ${roomConfig.numQuestions} perguntas · ${roomConfig.timePerQ}s cada · Dificuldade ${roomConfig.difficulty}`;
+
+  showScreen('screen-lobby');
+  listenLobby();
+}
+
+// ═══════════════════════════════════════════════
+// LOBBY LISTENER
+// ═══════════════════════════════════════════════
+function listenLobby() {
+  const ref = roomRef.on('value', snap => {
+    if (!snap.exists()) { leaveRoom(); return; }
+    const data = snap.val();
+
+    if (myRole === 'host') {
+      if (data.guest) {
+        oppName = data.guest.name;
+        document.getElementById('lobby-opp-name').textContent = oppName;
+        document.getElementById('lobby-opp-slot').innerHTML = `
+          <div class="player-avatar avatar-opp">${oppName.slice(0,2).toUpperCase()}</div>
+          <div class="player-name">${oppName}</div>`;
+        document.getElementById('btn-start').classList.remove('hidden');
+      } else {
+        document.getElementById('btn-start').classList.add('hidden');
+        document.getElementById('lobby-opp-slot').innerHTML = `<div class="waiting-dot"></div><div class="player-name" style="color:var(--muted);">Aguardando...</div>`;
+      }
+    }
+
+    if (data.status === 'loading') {
+      showScreen('screen-loading');
+      document.getElementById('loading-theme').textContent = 'Temas: ' + roomConfig.themes.join(', ');
+    }
+
+    if (data.status === 'playing' && data.questions) {
+      questions = Object.values(data.questions);
+      currentQ = data.currentQuestion || 0;
+      myScore = 0; oppScore = 0;
+      roomRef.off('value', ref);
+      startGameScreen();
+    }
+  });
+}
+
+function leaveRoom() {
+  unsubAll();
+  if (roomRef) { roomRef.off(); if (myRole === 'host') roomRef.remove(); }
+  roomRef = null;
+  showScreen('screen-home');
+}
+
+// ═══════════════════════════════════════════════
+// START GAME (host only — generates questions)
+// ═══════════════════════════════════════════════
+async function startGame() {
+  if (myRole !== 'host') return;
+  await roomRef.update({ status: 'loading' });
+  showScreen('screen-loading');
+  document.getElementById('loading-theme').textContent = 'Temas: ' + roomConfig.themes.join(', ');
+
+  const qs = await generateQuestions();
+  if (!qs) { showToast('Erro ao gerar perguntas. Verifique a chave Gemini.'); await roomRef.update({status:'waiting'}); showScreen('screen-lobby'); return; }
+
+  const qObj = {};
+  qs.forEach((q, i) => { qObj[i] = q; });
+
+  await roomRef.update({
+    status: 'playing',
+    questions: qObj,
+    currentQuestion: 0,
+    host: { name: myName, score: 0, answer: null },
+    guest: { name: oppName, score: 0, answer: null },
+  });
+}
+
+// ═══════════════════════════════════════════════
+// GEMINI
+// ═══════════════════════════════════════════════
+async function generateQuestions() {
+  const themes = roomConfig.themes.join(', ');
+  const n = roomConfig.numQuestions;
+  const diff = roomConfig.difficulty;
+
+  const prompt = `Crie ${n} perguntas de quiz sobre os temas: ${themes}.
+Dificuldade: ${diff}.
+Retorne APENAS um array JSON válido, sem texto extra, sem markdown, sem \`\`\`.
+Formato exato de cada item:
+{"question":"...","options":["A","B","C","D"],"answer":0}
+onde "answer" é o índice (0-3) da opção correta.
+Varie os temas se houver mais de um. Garanta que as opções sejam plausíveis.`;
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 3000 }
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    let text = data.candidates[0].content.parts[0].text.trim();
+    // strip markdown fences if present
+    text = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const arr = JSON.parse(text);
+    return arr;
+  } catch(e) {
+    console.error('Gemini error:', e);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// GAME SCREEN
+// ═══════════════════════════════════════════════
+function startGameScreen() {
+  myScore = 0; oppScore = 0; currentQ = 0;
+  document.getElementById('score-me-name').textContent = myName;
+  document.getElementById('score-opp-name').textContent = oppName;
+  updateScoreboard();
+  showScreen('screen-game');
+  loadQuestion(0);
+  listenGame();
+}
+
+function listenGame() {
+  const fn = roomRef.on('value', snap => {
+    if (!snap.exists()) { leaveRoom(); return; }
+    const data = snap.val();
+
+    const myData = data[myRole];
+    const oppData = data[myRole === 'host' ? 'guest' : 'host'];
+
+    if (oppData) {
+      oppScore = oppData.score || 0;
+      updateScoreboard();
+
+      if (oppData.answer !== null && oppData.answer !== undefined) {
+        document.getElementById('opp-dot').classList.remove('thinking');
+        document.getElementById('opp-status-text').textContent = oppName + ' respondeu ✓';
+      } else {
+        document.getElementById('opp-dot').classList.add('thinking');
+        document.getElementById('opp-status-text').textContent = oppName + ' respondendo...';
+      }
+
+      // both answered → advance
+      if (myData && myData.answer !== null && myData.answer !== undefined &&
+          oppData.answer !== null && oppData.answer !== undefined) {
+        const nextQ = data.currentQuestion + 1;
+        if (nextQ >= questions.length) {
+          // end
+          setTimeout(() => showResult(data), 1800);
+        } else {
+          if (myRole === 'host') {
+            setTimeout(async () => {
+              await roomRef.update({ currentQuestion: nextQ });
+              await roomRef.child('host').update({ answer: null });
+              await roomRef.child('guest').update({ answer: null });
+            }, 1800);
+          }
+          setTimeout(() => {
+            currentQ = nextQ;
+            loadQuestion(nextQ);
+          }, 1800);
+        }
+      }
+    }
+
+    if (data.status === 'ended') {
+      showResult(data);
+    }
+  });
+  unsubscribers.push(() => roomRef.off('value', fn));
+}
+
+function loadQuestion(idx) {
+  if (idx >= questions.length) return;
+  answered = false;
+  const q = questions[idx];
+  totalTime = roomConfig.timePerQ || 20;
+  timeLeft = totalTime;
+
+  document.getElementById('question-num').textContent = `PERGUNTA ${idx+1} DE ${questions.length}`;
+  document.getElementById('question-text').textContent = q.question;
+  document.getElementById('both-answered').textContent = '';
+  document.getElementById('opp-dot').classList.add('thinking');
+  document.getElementById('opp-status-text').textContent = oppName + ' respondendo...';
+
+  const letters = ['A','B','C','D'];
+  const grid = document.getElementById('options-grid');
+  grid.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.id = 'opt-' + i;
+    btn.innerHTML = `<span class="letter-badge">${letters[i]}</span>${opt}`;
+    btn.onclick = () => selectAnswer(i);
+    grid.appendChild(btn);
+  });
+
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  const circumference = 150.8;
+  const circle = document.getElementById('timer-circle');
+  const text = document.getElementById('timer-text');
+
+  timeLeft = totalTime;
+  circle.style.strokeDashoffset = 0;
+  circle.style.stroke = 'var(--accent)';
+  text.textContent = timeLeft;
+
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    text.textContent = timeLeft;
+    const progress = (totalTime - timeLeft) / totalTime;
+    circle.style.strokeDashoffset = circumference * progress;
+
+    if (timeLeft <= 5) circle.style.stroke = 'var(--red)';
+    else if (timeLeft <= 10) circle.style.stroke = 'var(--accent)';
+
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      if (!answered) timeUp();
+    }
+  }, 1000);
+}
+
+async function selectAnswer(idx) {
+  if (answered) return;
+  answered = true;
+  clearInterval(timerInterval);
+
+  const q = questions[currentQ];
+  const correct = q.answer;
+  const isRight = idx === correct;
+
+  // visual feedback
+  document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+  document.getElementById('opt-' + idx).classList.add(isRight ? 'correct' : 'wrong');
+  if (!isRight) document.getElementById('opt-' + correct).classList.add('correct');
+
+  if (isRight) {
+    const points = Math.max(100, Math.round(timeLeft / totalTime * 500));
+    myScore += points;
+    updateScoreboard();
+    document.getElementById('both-answered').textContent = `+${points} pontos!`;
+  } else {
+    document.getElementById('both-answered').textContent = 'Resposta errada';
+  }
+
+  await roomRef.child(myRole).update({ answer: idx, score: myScore });
+}
+
+async function timeUp() {
+  answered = true;
+  document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+  const correct = questions[currentQ].answer;
+  document.getElementById('opt-' + correct).classList.add('correct');
+  document.getElementById('both-answered').textContent = 'Tempo esgotado!';
+  await roomRef.child(myRole).update({ answer: -1, score: myScore });
+}
+
+function updateScoreboard() {
+  document.getElementById('score-me').textContent = myScore;
+  document.getElementById('score-opp').textContent = oppScore;
+}
+
+// ═══════════════════════════════════════════════
+// RESULT
+// ═══════════════════════════════════════════════
+function showResult(data) {
+  clearInterval(timerInterval);
+  unsubAll();
+
+  const me = data[myRole];
+  const opp = data[myRole === 'host' ? 'guest' : 'host'];
+
+  const myFinal = me ? me.score : myScore;
+  const oppFinal = opp ? opp.score : oppScore;
+
+  document.getElementById('final-me-pts').textContent = myFinal;
+  document.getElementById('final-opp-pts').textContent = oppFinal;
+  document.getElementById('final-me-name').textContent = myName + ' (você)';
+  document.getElementById('final-opp-name').textContent = oppName;
+
+  const meCard = document.getElementById('final-me-card');
+  const oppCard = document.getElementById('final-opp-card');
+
+  if (myFinal > oppFinal) {
+    document.getElementById('result-icon').textContent = '🏆';
+    document.getElementById('result-title').textContent = 'Você venceu!';
+    document.getElementById('result-sub').textContent = `Parabéns, ${myName}!`;
+    meCard.classList.add('winner-card');
+  } else if (myFinal < oppFinal) {
+    document.getElementById('result-icon').textContent = '😤';
+    document.getElementById('result-title').textContent = 'Você perdeu!';
+    document.getElementById('result-sub').textContent = `${oppName} foi mais rápido desta vez`;
+    oppCard.classList.add('winner-card');
+  } else {
+    document.getElementById('result-icon').textContent = '🤝';
+    document.getElementById('result-title').textContent = 'Empate!';
+    document.getElementById('result-sub').textContent = 'Impressionante! Mesma pontuação';
+  }
+
+  showScreen('screen-result');
+}
+
+async function playAgain() {
+  if (myRole === 'host') {
+    await roomRef.update({
+      status: 'waiting',
+      questions: null,
+      currentQuestion: -1,
+      'host/answer': null, 'host/score': 0,
+    });
+    showScreen('screen-create');
+  } else {
+    showScreen('screen-home');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+function copyLink() {
+  const url = document.getElementById('lobby-link').getAttribute('data-url');
+  navigator.clipboard.writeText(url).then(() => showToast('Link copiado!'));
+}
+
+function showToast(msg, duration=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+function unsubAll() {
+  unsubscribers.forEach(fn => fn());
+  unsubscribers = [];
+}
+</script>
+</body>
+</html>
