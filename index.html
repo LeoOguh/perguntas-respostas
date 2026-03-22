@@ -504,27 +504,6 @@
 <div class="orb2"></div>
 
 <!-- ═══════════════════════════════
-     SCREEN: CONFIG (first time)
-═══════════════════════════════ -->
-<div id="screen-config" class="screen hidden">
-  <div class="logo">Quiz<span>Battle</span></div>
-  <p class="tagline">Configure suas chaves para começar</p>
-
-  <div class="config-note">
-    Suas chaves ficam salvas apenas no navegador (localStorage) e nunca são enviadas para nenhum servidor externo além das próprias APIs.
-  </div>
-
-  <div class="card">
-    <div class="card-label">Chave da API Gemini</div>
-    <input type="password" id="cfg-gemini" placeholder="AIza..." />
-    <div class="card-label">Firebase Config (JSON)</div>
-    <textarea id="cfg-firebase" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;color:var(--c2);font-family:var(--font-body);font-size:0.82rem;padding:12px;outline:none;resize:vertical;min-height:140px;margin-bottom:12px;" placeholder='{"apiKey":"...","authDomain":"...","databaseURL":"...","projectId":"..."}'></textarea>
-    <p style="font-size:0.78rem;color:var(--muted);margin-bottom:16px;">Crie um projeto gratuito em <a href="https://console.firebase.google.com" target="_blank" style="color:var(--accent);">firebase.google.com</a>, ative o Realtime Database e copie o config do seu app aqui.</p>
-    <button class="btn btn-primary" onclick="saveConfig()">Salvar e continuar</button>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════
      SCREEN: HOME
 ═══════════════════════════════ -->
 <div id="screen-home" class="screen hidden">
@@ -538,10 +517,7 @@
     <button class="btn btn-primary" onclick="goCreate()">Criar sala</button>
     <div class="divider">ou</div>
     <button class="btn btn-secondary" onclick="goJoin()">Entrar em uma sala</button>
-  </div>
-
-  <p style="text-align:center;font-size:0.75rem;color:var(--muted);margin-top:16px;cursor:pointer;" onclick="resetConfig()">⚙ Reconfigurar chaves</p>
-</div>
+  </div></div>
 
 <!-- ═══════════════════════════════
      SCREEN: CREATE ROOM
@@ -740,25 +716,26 @@ let unsubscribers = [];
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyArsi3BhwH7pAKMnRmExFbHIRJLZGZJZkU",
+  authDomain: "perguntas-84dbb.firebaseapp.com",
+  databaseURL: "https://perguntas-84dbb-default-rtdb.firebaseio.com",
+  projectId: "perguntas-84dbb",
+  storageBucket: "perguntas-84dbb.firebasestorage.app",
+  messagingSenderId: "408153151165",
+  appId: "1:408153151165:web:b0cf2e7388b9a2f36149d4",
+  measurementId: "G-P4FM7D9C7B"
+};
+
 window.addEventListener('DOMContentLoaded', () => {
-  // check URL for room code
+  GEMINI_KEY = "AIzaSyDEfXor9zwwRacu0A6vI4xxU4tICdGEF9Y";
+  initFirebase(FIREBASE_CONFIG);
+
   const params = new URLSearchParams(window.location.search);
   const codeFromUrl = params.get('room');
 
-  const savedGemini = localStorage.getItem('qb_gemini');
-  const savedFb = localStorage.getItem('qb_firebase');
-
-  if (!savedGemini || !savedFb) {
-    showScreen('screen-config');
-    return;
-  }
-
-  initFirebase(savedFb);
-  GEMINI_KEY = savedGemini;
-
   if (codeFromUrl) {
     showScreen('screen-home');
-    // pre-fill join
     setTimeout(() => {
       const name = localStorage.getItem('qb_name') || '';
       document.getElementById('player-name').value = name;
@@ -771,16 +748,15 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function initFirebase(configStr) {
+function initFirebase(cfg) {
   try {
-    const cfg = typeof configStr === 'string' ? JSON.parse(configStr) : configStr;
     if (!firebase.apps.length) {
       firebase.initializeApp(cfg);
     }
     db = firebase.database();
     return true;
   } catch(e) {
-    showToast('Erro no Firebase: ' + e.message);
+    console.error('Erro no Firebase:', e);
     return false;
   }
 }
@@ -788,33 +764,6 @@ function initFirebase(configStr) {
 // ═══════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════
-function saveConfig() {
-  const gemini = document.getElementById('cfg-gemini').value.trim();
-  const fb = document.getElementById('cfg-firebase').value.trim();
-
-  if (!gemini) { showToast('Informe a chave do Gemini'); return; }
-  if (!fb) { showToast('Informe o config do Firebase'); return; }
-
-  try {
-    JSON.parse(fb);
-  } catch(e) {
-    showToast('Firebase config inválido (verifique o JSON)');
-    return;
-  }
-
-  localStorage.setItem('qb_gemini', gemini);
-  localStorage.setItem('qb_firebase', fb);
-  GEMINI_KEY = gemini;
-
-  if (!initFirebase(fb)) return;
-  showScreen('screen-home');
-}
-
-function resetConfig() {
-  localStorage.removeItem('qb_gemini');
-  localStorage.removeItem('qb_firebase');
-  showScreen('screen-config');
-}
 
 // ═══════════════════════════════════════════════
 // NAVIGATION
