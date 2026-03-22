@@ -911,14 +911,22 @@ async function joinRoom() {
 // LOBBY LISTENER
 // ═══════════════════════════════════════════════
 function listenLobby() {
-  const ref = roomRef.on('value', snap => {
+  let gameStarted = false;
+
+  const lobbyListener = snap => {
     if (!snap.exists()) { leaveRoom(); return; }
     const data = snap.val();
 
+    // update oppName from Firebase (works for both host and guest)
+    if (myRole === 'host' && data.guest) {
+      oppName = data.guest.name;
+    } else if (myRole === 'guest' && data.host) {
+      oppName = data.host.name;
+    }
+
+    // host sees guest join → show start button
     if (myRole === 'host') {
       if (data.guest) {
-        oppName = data.guest.name;
-        document.getElementById('lobby-opp-name').textContent = oppName;
         document.getElementById('lobby-opp-slot').innerHTML = `
           <div class="player-avatar avatar-opp">${oppName.slice(0,2).toUpperCase()}</div>
           <div class="player-name">${oppName}</div>`;
@@ -929,19 +937,32 @@ function listenLobby() {
       }
     }
 
+    // both players: react to status changes
     if (data.status === 'loading') {
       showScreen('screen-loading');
-      document.getElementById('loading-theme').textContent = 'Temas: ' + roomConfig.themes.join(', ');
+      if (roomConfig && roomConfig.themes) {
+        document.getElementById('loading-theme').textContent = 'Temas: ' + roomConfig.themes.join(', ');
+      }
+      // guest picks up roomConfig from Firebase
+      if (myRole === 'guest' && data.config) {
+        roomConfig = data.config;
+      }
     }
 
-    if (data.status === 'playing' && data.questions) {
+    if (data.status === 'playing' && data.questions && !gameStarted) {
+      gameStarted = true;
+      roomRef.off('value', lobbyListener);
       questions = Object.values(data.questions);
       currentQ = data.currentQuestion || 0;
       myScore = 0; oppScore = 0;
-      roomRef.off('value', ref);
+      // guest: update scoreboard names now that oppName is set
+      document.getElementById('score-me-name') && (document.getElementById('score-me-name').textContent = myName);
+      document.getElementById('score-opp-name') && (document.getElementById('score-opp-name').textContent = oppName);
       startGameScreen();
     }
-  });
+  };
+
+  roomRef.on('value', lobbyListener);
 }
 
 function leaveRoom() {
@@ -956,7 +977,14 @@ function leaveRoom() {
 // ═══════════════════════════════════════════════
 async function startGame() {
   if (myRole !== 'host') return;
-  await roomRef.update({ status: 'loading' });
+
+  // refresh oppName from Firebase before starting
+  const snap = await roomRef.once('value');
+  const data = snap.val();
+  if (!data.guest) { showToast('Aguarde o adversário entrar na sala'); return; }
+  oppName = data.guest.name;
+
+  await roomRef.update({ status: 'loading', config: roomConfig });
   showScreen('screen-loading');
   document.getElementById('loading-theme').textContent = 'Temas: ' + roomConfig.themes.join(', ');
 
