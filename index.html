@@ -469,6 +469,41 @@
     line-height: 1.5;
   }
 
+  /* question transition */
+  #question-card {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  #question-card.fading-out {
+    opacity: 0;
+    transform: translateY(-12px);
+    pointer-events: none;
+  }
+  #question-card.fading-in {
+    animation: slideInUp 0.4s ease forwards;
+  }
+  @keyframes slideInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 0.82rem;
+  }
+  .result-bar-label { color: var(--muted); min-width: 80px; }
+  .result-bar-track {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+  .result-bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+
   .hidden { display: none !important; }
 
   .toast {
@@ -1090,75 +1125,105 @@ function startGameScreen() {
   document.getElementById('score-opp-name').textContent = oppName;
   updateScoreboard();
   showScreen('screen-game');
-  loadQuestion(0);
+  loadQuestion(0);   // first question loads directly (no transition needed)
   listenGame();
 }
 
 function listenGame() {
+  let advancePending = false;
+  let lastSeenQ = 0;  // q0 already loaded by startGameScreen
+
   const fn = roomRef.on('value', snap => {
     if (!snap.exists()) { leaveRoom(); return; }
     const data = snap.val();
 
-    const myData = data[myRole];
-    const oppData = data[myRole === 'host' ? 'guest' : 'host'];
+    if (data.status === 'ended') { showResult(data); return; }
 
+    const myData  = data[myRole];
+    const oppRole = myRole === 'host' ? 'guest' : 'host';
+    const oppData = data[oppRole];
+
+    // sync scores
     if (oppData) {
       oppScore = oppData.score || 0;
       updateScoreboard();
-
-      if (oppData.answer !== null && oppData.answer !== undefined) {
-        document.getElementById('opp-dot').classList.remove('thinking');
-        document.getElementById('opp-status-text').textContent = oppName + ' respondeu ✓';
-      } else {
-        document.getElementById('opp-dot').classList.add('thinking');
-        document.getElementById('opp-status-text').textContent = oppName + ' respondendo...';
-      }
-
-      // both answered → advance
-      if (myData && myData.answer !== null && myData.answer !== undefined &&
-          oppData.answer !== null && oppData.answer !== undefined) {
-        const nextQ = data.currentQuestion + 1;
-        if (nextQ >= questions.length) {
-          // end
-          setTimeout(() => showResult(data), 1800);
-        } else {
-          if (myRole === 'host') {
-            setTimeout(async () => {
-              await roomRef.update({ currentQuestion: nextQ });
-              await roomRef.child('host').update({ answer: null });
-              await roomRef.child('guest').update({ answer: null });
-            }, 1800);
-          }
-          setTimeout(() => {
-            currentQ = nextQ;
-            loadQuestion(nextQ);
-          }, 1800);
-        }
-      }
     }
 
-    if (data.status === 'ended') {
-      showResult(data);
+    // opponent answer indicator
+    if (oppData) {
+      const oppAnswered = oppData.answer !== null && oppData.answer !== undefined;
+      document.getElementById('opp-dot').classList.toggle('thinking', !oppAnswered);
+      document.getElementById('opp-status-text').textContent = oppAnswered
+        ? oppName + ' respondeu ✓'
+        : oppName + ' respondendo...';
+    }
+
+    const serverQ   = data.currentQuestion;
+    const bothDone  = myData  && myData.answer  !== null && myData.answer  !== undefined
+                   && oppData && oppData.answer !== null && oppData.answer !== undefined;
+
+    // ── HOST drives question advancement ──────────────────────────────
+    if (myRole === 'host' && bothDone && !advancePending) {
+      advancePending = true;
+      const nextQ = serverQ + 1;
+
+      setTimeout(async () => {
+        if (nextQ >= questions.length) {
+          await roomRef.update({ status: 'ended' });
+        } else {
+          // atomic update: clear answers + bump question index
+          await roomRef.update({
+            currentQuestion: nextQ,
+            [`${myRole}/answer`]: null,
+            [`${oppRole}/answer`]: null,
+          });
+        }
+        advancePending = false;
+      }, 2200);
+    }
+
+    // ── BOTH players react to currentQuestion changing ─────────────────
+    if (serverQ !== lastSeenQ && serverQ > lastSeenQ) {
+      lastSeenQ = serverQ;
+      // small delay so UI shows result feedback before wiping
+      setTimeout(() => transitionToQuestion(serverQ), 400);
     }
   });
+
   unsubscribers.push(() => roomRef.off('value', fn));
+}
+
+function transitionToQuestion(idx) {
+  if (idx >= questions.length) return;
+  const card = document.getElementById('question-card');
+
+  // fade out
+  card.classList.add('fading-out');
+  setTimeout(() => {
+    card.classList.remove('fading-out');
+    loadQuestion(idx);
+    // fade in
+    card.classList.add('fading-in');
+    setTimeout(() => card.classList.remove('fading-in'), 400);
+  }, 300);
 }
 
 function loadQuestion(idx) {
   if (idx >= questions.length) return;
   answered = false;
-  const q = questions[idx];
+  currentQ  = idx;
+  const q   = questions[idx];
   totalTime = roomConfig.timePerQ || 20;
-  timeLeft = totalTime;
+  timeLeft  = totalTime;
 
-  document.getElementById('question-num').textContent = `PERGUNTA ${idx+1} DE ${questions.length}`;
+  document.getElementById('question-num').textContent  = `PERGUNTA ${idx+1} DE ${questions.length}`;
   document.getElementById('question-text').textContent = q.question;
   document.getElementById('both-answered').textContent = '';
   document.getElementById('opp-dot').classList.add('thinking');
   document.getElementById('opp-status-text').textContent = oppName + ' respondendo...';
 
   const letters = ['A','B','C','D'];
-  const grid = document.getElementById('options-grid');
+  const grid    = document.getElementById('options-grid');
   grid.innerHTML = '';
   q.options.forEach((opt, i) => {
     const btn = document.createElement('button');
@@ -1217,9 +1282,10 @@ async function selectAnswer(idx) {
     const points = Math.max(100, Math.round(timeLeft / totalTime * 500));
     myScore += points;
     updateScoreboard();
-    document.getElementById('both-answered').textContent = `+${points} pontos!`;
+    document.getElementById('both-answered').innerHTML = `<span style="color:var(--green);font-weight:500;">✓ Correto! +${points} pontos</span>`;
   } else {
-    document.getElementById('both-answered').textContent = 'Resposta errada';
+    const correctText = q.options[correct];
+    document.getElementById('both-answered').innerHTML = `<span style="color:var(--red);">✗ Errado</span> · <span style="color:var(--muted);font-size:0.8rem;">Correto: ${correctText}</span>`;
   }
 
   await roomRef.child(myRole).update({ answer: idx, score: myScore });
@@ -1230,7 +1296,8 @@ async function timeUp() {
   document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
   const correct = questions[currentQ].answer;
   document.getElementById('opt-' + correct).classList.add('correct');
-  document.getElementById('both-answered').textContent = 'Tempo esgotado!';
+  const correctText2 = questions[currentQ].options[questions[currentQ].answer];
+  document.getElementById('both-answered').innerHTML = `<span style="color:var(--accent);">⏱ Tempo esgotado</span> · <span style="color:var(--muted);font-size:0.8rem;">Correto: ${correctText2}</span>`;
   await roomRef.child(myRole).update({ answer: -1, score: myScore });
 }
 
