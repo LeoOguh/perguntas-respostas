@@ -514,10 +514,27 @@
     <div class="card-label">Seu nome</div>
     <input type="text" id="player-name" placeholder="Como quer ser chamado?" maxlength="20" />
 
-    <button class="btn btn-primary" onclick="goCreate()">Criar sala</button>
-    <div class="divider">ou</div>
-    <button class="btn btn-secondary" onclick="goJoin()">Entrar em uma sala</button>
-  </div></div>
+    <div class="card-label">Chave da API Gemini</div>
+    <input type="password" id="home-gemini-key" placeholder="AIza..." autocomplete="off" />
+    <p style="font-size:0.75rem;color:var(--muted);margin-top:-6px;margin-bottom:12px;">
+      Gere sua chave gratuita em <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/apikey</a>
+    </p>
+
+    <div id="home-join-section" class="hidden">
+      <div style="background:rgba(168,218,220,0.1);border:1px solid rgba(168,218,220,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:0.85rem;color:var(--accent2);">
+        🎮 Você foi convidado para uma sala! Digite seu nome e clique em <strong>Entrar na sala</strong>.
+      </div>
+      <input type="text" id="home-join-code" style="text-transform:uppercase;letter-spacing:4px;font-family:var(--font-head);font-size:1.1rem;text-align:center;" readonly />
+      <button class="btn btn-primary" onclick="goJoinDirect()">Entrar na sala</button>
+    </div>
+
+    <div id="home-create-section">
+      <button class="btn btn-primary" onclick="goCreate()">Criar sala</button>
+      <div class="divider">ou</div>
+      <button class="btn btn-secondary" onclick="goJoin()">Entrar em uma sala</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════
      SCREEN: CREATE ROOM
@@ -728,23 +745,25 @@ const FIREBASE_CONFIG = {
 };
 
 window.addEventListener('DOMContentLoaded', () => {
-  GEMINI_KEY = "AIzaSyDEfXor9zwwRacu0A6vI4xxU4tICdGEF9Y";
+  GEMINI_KEY = localStorage.getItem("qb_gemini") || "";
   initFirebase(FIREBASE_CONFIG);
 
   const params = new URLSearchParams(window.location.search);
   const codeFromUrl = params.get('room');
+  const savedName = localStorage.getItem('qb_name') || '';
 
   if (codeFromUrl) {
+    // joining via link — show home so user can set name, then auto-join
     showScreen('screen-home');
-    setTimeout(() => {
-      const name = localStorage.getItem('qb_name') || '';
-      document.getElementById('player-name').value = name;
-      goJoin(codeFromUrl.toUpperCase());
-    }, 100);
+    document.getElementById('player-name').value = savedName;
+    if (GEMINI_KEY) document.getElementById('home-gemini-key').value = GEMINI_KEY;
+    document.getElementById('home-join-code').value = codeFromUrl.toUpperCase();
+    document.getElementById('home-join-section').classList.remove('hidden');
+    document.getElementById('home-create-section').classList.add('hidden');
   } else {
     showScreen('screen-home');
-    const name = localStorage.getItem('qb_name') || '';
-    document.getElementById('player-name').value = name;
+    document.getElementById('player-name').value = savedName;
+    if (GEMINI_KEY) document.getElementById('home-gemini-key').value = GEMINI_KEY;
   }
 });
 
@@ -779,19 +798,40 @@ function showScreen(id) {
   }
 }
 
-function goCreate() {
-  myName = document.getElementById('player-name').value.trim() || 'Jogador 1';
+function getAndSaveHomeInputs() {
+  myName = document.getElementById('player-name').value.trim() || 'Jogador';
   localStorage.setItem('qb_name', myName);
+  const keyInput = document.getElementById('home-gemini-key').value.trim();
+  if (keyInput) {
+    GEMINI_KEY = keyInput;
+    localStorage.setItem('qb_gemini', keyInput);
+  }
+  if (!GEMINI_KEY) {
+    showToast('Informe a chave da API Gemini');
+    return false;
+  }
+  return true;
+}
+
+function goCreate() {
+  if (!getAndSaveHomeInputs()) return;
   showScreen('screen-create');
 }
 
 function goJoin(prefill) {
-  myName = document.getElementById('player-name').value.trim() || 'Jogador 2';
-  localStorage.setItem('qb_name', myName);
+  if (!getAndSaveHomeInputs()) return;
   showScreen('screen-join');
   if (prefill) {
     document.getElementById('join-code').value = prefill;
   }
+}
+
+function goJoinDirect() {
+  if (!getAndSaveHomeInputs()) return;
+  const code = document.getElementById('home-join-code').value.trim().toUpperCase();
+  showScreen('screen-join');
+  document.getElementById('join-code').value = code;
+  joinRoom();
 }
 
 // ═══════════════════════════════════════════════
