@@ -8,7 +8,6 @@
   "theme_color": "#0a0a0a",
   "orientation": "portrait-primary",
   "icons": [
-    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj4KICA8cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjQyIiBmaWxsPSIjZThmZjZiIi8+CiAgPHJlY3QgeD0iMjQiIHk9IjI0IiB3aWR0aD0iNjYiIGhlaWdodD0iNjYiIHJ4PSIxNSIgZmlsbD0iIzBhMGEwYSIvPgogIDxyZWN0IHg9IjEwMiIgeT0iMjQiIHdpZHRoPSI2NiIgaGVpZ2h0PSI2NiIgcng9IjE1IiBmaWxsPSIjMGEwYTBhIiBvcGFjaXR5PSIuNyIvPgogIDxyZWN0IHg9IjI0IiB5PSIxMDIiIHdpZHRoPSI2NiIgaGVpZ2h0PSI2NiIgcng9IjE1IiBmaWxsPSIjMGEwYTBhIiBvcGFjaXR5PSIuNyIvPgogIDxyZWN0IHg9IjEwMiIgeT0iMTAyIiB3aWR0aD0iNjYiIGhlaWdodD0iNjYiIHJ4PSIxNSIgZmlsbD0iIzBhMGEwYSIgb3BhY2l0eT0iLjQiLz4KPC9zdmc+", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }

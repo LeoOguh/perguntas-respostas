@@ -372,7 +372,7 @@ const FIREBASE_CONFIG = {
 };
 
 // ⚠️ Troque pelo seu e-mail do Google
-const ADMIN_EMAIL = "thepklizar@gmail.com";
+const ADMIN_EMAIL = "SEU_EMAIL_AQUI@gmail.com";
 
 firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth();
@@ -638,9 +638,83 @@ async function confirmBalanceAdjust() {
 // ROOMS ACTIONS
 // ════════════════════════════════════════
 async function closeRoom(id) {
-  if (!confirm('Encerrar esta mesa?')) return;
-  await db.ref('poker_rooms/' + id + '/status').set('ended');
-  adminToast('Mesa encerrada', 's');
+  if (!confirm('Encerrar esta mesa e devolver fichas aos jogadores?')) return;
+
+  const snap = await db.ref('poker_rooms/' + id).once('value');
+  const room = snap.val();
+  if (!room) { adminToast('Mesa não encontrada', 'e'); return; }
+
+  const players = room.players || {};
+  const game    = room.game   || {};
+
+  // Build refund map: stack + bets still on the table
+  // If mid-hand, pot is split equally among non-folded players
+  const refunds = {};
+
+  const uids = Object.keys(players);
+  if (uids.length === 0) {
+    adminToast('Nenhum jogador na mesa', 'e');
+    return;
+  }
+
+  uids.forEach(uid => {
+    // Start with game.stacks (already deducted from bets sent to pot)
+    // Fall back to players[uid].stack if no game in progress
+    let stack = 0;
+    if (game.stacks && game.stacks[uid] !== undefined) {
+      stack = game.stacks[uid];
+    } else {
+      stack = players[uid].stack || 0;
+    }
+
+    // Add back any bets placed this street that haven't entered the pot yet
+    if (game.bets && game.bets[uid] !== undefined) {
+      stack = parseFloat((stack + game.bets[uid]).toFixed(2));
+    }
+
+    refunds[uid] = stack;
+  });
+
+  // Distribute the pot equally among non-folded players
+  const pot = game.pot || 0;
+  if (pot > 0) {
+    const folded    = game.folded || {};
+    const activePot = uids.filter(uid => !folded[uid]);
+    const share     = activePot.length > 0
+      ? parseFloat((pot / activePot.length).toFixed(2))
+      : 0;
+    activePot.forEach(uid => {
+      refunds[uid] = parseFloat(((refunds[uid] || 0) + share).toFixed(2));
+    });
+  }
+
+  // Write refunds to wallets
+  let totalRefunded = 0;
+  for (const [uid, amount] of Object.entries(refunds)) {
+    if (amount <= 0) continue;
+    totalRefunded += amount;
+
+    const userSnap = await db.ref('users/' + uid + '/balance').once('value');
+    const curBal   = userSnap.val() || 0;
+    const newBal   = parseFloat((curBal + amount).toFixed(2));
+
+    await db.ref('users/' + uid + '/balance').set(newBal);
+    await db.ref('transactions').push({
+      uid,
+      delta:        amount,
+      reason:       `Mesa encerrada pelo admin — ${room.name}`,
+      balanceAfter: newBal,
+      ts:           Date.now(),
+    });
+  }
+
+  // Mark room as ended and clear players
+  const updates = {};
+  updates[`poker_rooms/${id}/status`]  = 'ended';
+  updates[`poker_rooms/${id}/players`] = null;
+  await db.ref().update(updates);
+
+  adminToast(`Mesa encerrada. R$ ${totalRefunded.toFixed(2)} devolvidos.`, 's');
 }
 
 // ════════════════════════════════════════
